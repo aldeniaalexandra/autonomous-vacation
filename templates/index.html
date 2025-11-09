@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WanderGenie - AI Vacation Planner</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Theme reference: Cognitus AI (colors, fonts, dark/light) from d:/07-project-llm/Cognitus-AI-V01/templates/index.html -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        /* Cognitus-inspired palette */
+        :root {
+            --ink-bg: #0a0a0a;
+            --ink-panel: #111111;
+            --ink-border: #27272a;
+            --ink-sub: #a1a1aa;
+            --ink-text: #ffffff;
+            --ink-text-strong: #f9fafb;
+            --ink-hover: rgba(255,255,255,0.05);
+            --btn-bg: #ffffff;
+            --btn-text: #000000;
+            --btn-border: #e5e7eb;
+        }
+
+        body {
+            background-color: var(--ink-bg);
+            color: var(--ink-text);
+            font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+        }
+        .container { max-width: 900px; }
+
+        /* Cards */
+        .card {
+            background-color: var(--ink-panel);
+            border: 1px solid var(--ink-border);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+            color: var(--ink-text);
+        }
+        .card h1, .card h2, .card h3 { color: var(--ink-text-strong); }
+
+        /* Buttons (Cognitus style) */
+        .btn-primary {
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+            border: 1px solid var(--btn-border);
+        }
+        .btn-primary:hover { background-color: #e5e7eb; color: #000000; }
+        .btn-outline-primary { color: var(--ink-text); border-color: var(--ink-border); }
+        .btn-outline-secondary, .btn-outline-success { color: var(--ink-text); border-color: var(--ink-border); }
+        .btn-outline-primary:hover, .btn-outline-secondary:hover, .btn-outline-success:hover { background-color: var(--ink-hover); }
+
+        /* Text */
+        .text-muted { color: var(--ink-sub) !important; }
+
+        /* Inputs */
+        .form-control, .form-select {
+            background-color: #0b0b0b;
+            border: 1px solid var(--ink-border);
+            color: var(--ink-text);
+        }
+        .form-control::placeholder { color: var(--ink-sub); }
+        .form-check-input { border-color: var(--ink-border); }
+
+        /* Output */
+        #plan-output {
+            background-color: var(--ink-panel);
+            border: 1px solid var(--ink-border);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        /* Plan table styles (LLM output) */
+        
+        .plan-table { width: 100%; font-size: 14px; }
+        .plan-table thead th { background: linear-gradient(135deg, #1a1a1a, #2a2a2a); color: #e5e5e5; }
+        .plan-table tbody td { vertical-align: middle; color: var(--ink-text); }
+        .plan-table td:nth-child(2) { /* Time column */
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+            width: 120px;
+        }
+        .plan-table td:nth-child(4) { /* Cost column */
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            width: 180px;
+        }
+        .plan-table .col-day { vertical-align: middle; font-weight: 600; }
+        .plan-table .col-total-label {
+            text-align: center; vertical-align: middle; background: #1a1a1a; color: #e5e5e5; font-weight: 600;
+        }
+        .plan-table .col-total-value {
+            text-align: right; font-variant-numeric: tabular-nums; vertical-align: middle; background: rgba(39,39,42,.3); color: var(--ink-text); font-weight: 600; width: 160px;
+        }
+
+        /* Zebra rows and hover for readability */
+        .plan-table tbody tr:nth-child(even) td { background: rgba(39,39,42,.3); }
+        .plan-table tbody tr:nth-child(odd) td { background: rgba(10,10,10,.5); }
+        .plan-table tbody tr:hover td { background-color: #1a1a1a !important; }
+
+        /* Theme Toggle Icon */
+        #theme-toggle {
+            border: none;
+            background: transparent;
+            font-size: 1.25rem;
+            padding: 0.25rem 0.5rem;
+            color: var(--ink-sub);
+            transition: color 300ms ease;
+        }
+        #theme-toggle:hover {
+            color: var(--ink-text);
+        }
+        #theme-toggle .bi-sun-fill { display: none; }
+        #theme-toggle .bi-moon-fill { display: block; }
+
+        /* Alerts */
+        .alert-secondary { background-color: #0b0b0b; border-color: var(--ink-border); color: var(--ink-sub); }
+
+        /* Light mode overrides */
+        body.light { background: #fafafa; color: #111; }
+        body.light .card { background: #ffffff; border-color: #e5e7eb; color: #111; }
+        body.light .card h1, body.light .card h2, body.light .card h3 { color: #111; }
+        body.light .text-muted { color: #444 !important; }
+        body.light .form-control, body.light .form-select { background: #f5f5f5; border-color: #e5e7eb; color: #111; }
+        body.light #plan-output { background: #ffffff; border-color: #e5e7eb; }
+        body.light .plan-table thead th { background: #f9fafb; color: #111; border-bottom: 1px solid #e5e7eb; }
+        body.light .plan-table tbody td { color: #111; }
+        body.light .plan-table tbody tr:nth-child(even) td { background: #f9fafb; }
+        body.light .plan-table tbody tr:nth-child(odd) td { background: #ffffff; }
+        body.light .btn-primary { background: #111; color: #fff; border-color: #111; }
+        body.light .btn-primary:hover { background: #27272a; }
+
+        body.light #theme-toggle { color: #444; }
+        body.light #theme-toggle:hover { color: #111; }
+        body.light #theme-toggle .bi-sun-fill { display: block; }
+        body.light #theme-toggle .bi-moon-fill { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container my-5">
+        <div class="d-flex justify-content-end mb-2">
+            <button id="theme-toggle" class="btn" aria-label="Toggle theme">
+                <i class="bi bi-sun-fill"></i>
+                <i class="bi bi-moon-fill"></i>
+            </button>
+        </div>
+        <div class="card p-4 mb-4">
+            <h1 class="text-center mb-4">WanderGenie</h1>
+            <p class="text-center text-muted mb-4">Your Personal AI Vacation Planner</p>
+            
+            <form id="plan-form">
+                <div class="mb-3">
+                    <label for="destination" class="form-label">Destination</label>
+                    <input type="text" class="form-control" id="destination" placeholder="e.g., Kyoto, Japan" required>
+                </div>
+                <div class="mb-3">
+                    <label for="duration" class="form-label">Duration (days)</label>
+                    <input type="number" class="form-control" id="duration" placeholder="e.g., 5" required>
+                </div>
+                <div class="mb-3">
+                    <label for="budget" class="form-label">Budget</label>
+                    <select class="form-select" id="budget">
+                        <option>Moderate</option>
+                        <option>Budget-friendly</option>
+                        <option>Luxury</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <label for="interests" class="form-label">Interests (comma-separated)</label>
+                    <input type="text" class="form-control" id="interests" placeholder="e.g., Culture, Food, Nature">
+                </div>
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary btn-lg">Generate Plan</button>
+                </div>
+            </form>
+
+            <div id="loading" class="text-center mt-4" style="display: none;">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p>Generating your dream vacation...</p>
+            </div>
+
+            <div id="plan-output" class="mt-4" style="display: none;"></div>
+        </div>
+
+        <!-- Permissions / OAuth / Payments / Booking Controls -->
+        <div class="card p-4">
+            <h2 class="h5 mb-3">Autonomous Booking Controls</h2>
+            <div id="action-status" class="alert alert-secondary" style="display:none"></div>
+
+            <div class="row g-4">
+                <!-- Consent -->
+                <div class="col-12 col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h3 class="h6">Permissions & Consent</h3>
+                        <p class="text-muted">Grant granular permissions for calendar and payments.</p>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="consent-calendar-read">
+                            <label class="form-check-label" for="consent-calendar-read">Calendar Read</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="consent-calendar-write">
+                            <label class="form-check-label" for="consent-calendar-write">Calendar Write</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="consent-payments">
+                            <label class="form-check-label" for="consent-payments">Payment Processing</label>
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="consent-preferences" checked>
+                            <label class="form-check-label" for="consent-preferences">Use Preferences</label>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-primary" id="btn-save-consent">Save Consent</button>
+                            <button class="btn btn-outline-secondary" id="btn-oauth-login">OAuth Login</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payments -->
+                <div class="col-12 col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h3 class="h6">Payments (Sandbox)</h3>
+                        <p class="text-muted">Store gateway token and authorize a test payment.</p>
+                        <div class="mb-2">
+                            <label class="form-label" for="gateway-token">Gateway Token</label>
+                            <input class="form-control" id="gateway-token" placeholder="tok_test_abc">
+                        </div>
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <label class="form-label" for="last4">Last 4</label>
+                                <input class="form-control" id="last4" placeholder="1234">
+                            </div>
+                            <div class="col-8">
+                                <label class="form-label" for="brand">Brand</label>
+                                <input class="form-control" id="brand" placeholder="VISA/Mastercard">
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button class="btn btn-outline-primary" id="btn-store-token">Store Token</button>
+                        </div>
+                        <hr>
+                        <div class="row g-2">
+                            <div class="col-6">
+                                <label class="form-label" for="amount-minor">Amount (minor units)</label>
+                                <input class="form-control" id="amount-minor" type="number" placeholder="250000">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label" for="currency">Currency</label>
+                                <input class="form-control" id="currency" placeholder="JPY">
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 mt-2">
+                            <button class="btn btn-outline-success" id="btn-authorize-payment">Authorize Payment</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Booking -->
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <h3 class="h6">Booking Automation</h3>
+                        <p class="text-muted">Process reservations based on the current plan or manual entries.</p>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-primary" id="btn-book-from-plan">Book from Current Plan</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Autonomous Controls -->
+                <div class="col-12">
+                    <div class="border rounded p-3">
+                        <h3 class="h6">Autonomous Mode</h3>
+                        <p class="text-muted">Enable policy-guarded holds and controlled capture with approval.</p>
+                        <div class="row g-2 align-items-center mb-2">
+                            <div class="col-auto">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="autonomous-toggle">
+                                    <label class="form-check-label" for="autonomous-toggle">Enable Autonomous Mode</label>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label" for="auto-max-budget">Max Budget (minor units)</label>
+                                <input class="form-control" id="auto-max-budget" type="number" placeholder="250000">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label" for="auto-currency">Currency</label>
+                                <input class="form-control" id="auto-currency" placeholder="JPY" value="JPY">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label" for="auto-vendor">Vendor (optional)</label>
+                                <input class="form-control" id="auto-vendor" placeholder="Airline X / Hotel Y">
+                            </div>
+                            <div class="col-12">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="auto-two-step" checked>
+                                    <label class="form-check-label" for="auto-two-step">Use two-step payment (authorize then capture)</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row g-2">
+                            <div class="col-4">
+                                <label class="form-label" for="auto-amount">Booking Amount (minor units)</label>
+                                <input class="form-control" id="auto-amount" type="number" placeholder="250000">
+                            </div>
+                            <div class="col-4">
+                                <label class="form-label" for="auto-idem">Idempotency Key (optional)</label>
+                                <input class="form-control" id="auto-idem" placeholder="hold-unique-key">
+                            </div>
+                            <div class="col-8 d-flex align-items-end gap-2">
+                                <button class="btn btn-outline-warning" id="btn-auto-hold">Hold Reservation</button>
+                                <button class="btn btn-outline-primary" id="btn-auto-approve">Approve</button>
+                <button class="btn btn-outline-success" id="btn-auto-capture">Capture Payment & Confirm</button>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">Audit Viewer</div>
+                    <div class="card-body">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-2">
+                                <label class="form-label" for="audit-limit">Limit</label>
+                                <input class="form-control" id="audit-limit" type="number" value="20">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label" for="audit-actor">Actor (optional)</label>
+                                <input class="form-control" id="audit-actor" placeholder="demo-user">
+                            </div>
+                            <div class="col-3">
+                                <label class="form-label" for="audit-action">Action (optional)</label>
+                                <input class="form-control" id="audit-action" placeholder="HELD, APPROVED, CAPTURED">
+                            </div>
+                            <div class="col-4 d-flex gap-2">
+                                <button class="btn btn-outline-secondary" id="btn-audit-refresh">Refresh</button>
+                                <button class="btn btn-outline-secondary" id="btn-audit-clear">Clear Filters</button>
+                            </div>
+                        </div>
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm table-striped" id="audit-table">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Actor</th>
+                                        <th>Action</th>
+                                        <th>Status</th>
+                                        <th>Reservation</th>
+                                        <th>Vendor</th>
+                                        <th>Amount</th>
+                                        <th>Currency</th>
+                                        <th>Reasons</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+                        <div id="auto-status" class="alert alert-secondary mt-2" style="display:none"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <script>
+        // --- Theme toggle ---
+        (function() {
+            const saved = localStorage.getItem('wg-theme');
+            if (saved === 'light') document.body.classList.add('light');
+            const btn = document.getElementById('theme-toggle');
+            btn?.addEventListener('click', () => {
+                document.body.classList.toggle('light');
+                localStorage.setItem('wg-theme', document.body.classList.contains('light') ? 'light' : 'dark');
+            });
+        })();
+        function formatPlanTable() {
+            const outputDiv = document.getElementById('plan-output');
+            const table = outputDiv.querySelector('table');
+            if (!table) return;
+
+            // Ensure plan-table class is present
+            table.classList.add('plan-table', 'table', 'table-striped', 'table-bordered');
+
+            const thead = table.tHead || table.querySelector('thead');
+            const tbody = table.tBodies[0] || table.querySelector('tbody');
+            const tfoot = table.tFoot || table.querySelector('tfoot');
+            if (!thead || !tbody) return;
+
+            // Remove any global footer totals; we’ll compute per-day totals
+            if (tfoot) tfoot.remove();
+
+            const headerCells = Array.from(thead.rows[0].cells);
+            let dayColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('day'));
+            let timeColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('time'));
+            let costColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('cost'));
+
+            // If headers missing or order unexpected, assume default positions
+            if (dayColIndex === -1) dayColIndex = 0;
+            if (timeColIndex === -1) timeColIndex = 1;
+            if (costColIndex === -1) costColIndex = headerCells.length - 1;
+
+            // Append Total columns to header
+            const totalLabelTh = document.createElement('th');
+            totalLabelTh.textContent = 'Total';
+            const totalValueTh = document.createElement('th');
+            totalValueTh.textContent = 'Total Value';
+            thead.rows[0].appendChild(totalLabelTh);
+            thead.rows[0].appendChild(totalValueTh);
+
+            // Group rows by Day
+            const rows = Array.from(tbody.rows);
+            const groups = new Map();
+            rows.forEach((row) => {
+                const dayCell = row.cells[dayColIndex];
+                const dayText = dayCell ? dayCell.textContent.trim() : '';
+                // Normalize Time separators to en dash
+                const timeCell = row.cells[timeColIndex];
+                if (timeCell) {
+                    let txt = timeCell.textContent.trim();
+                    // Replace various dash encodings (hyphen, em-dash, malformed 'â') with en dash
+                    txt = txt.replace(/\s*([-–—]|â)+\s*/g, '–');
+                    timeCell.textContent = txt;
+                    timeCell.classList.add('col-time');
+                }
+                if (!groups.has(dayText)) groups.set(dayText, []);
+                groups.get(dayText).push(row);
+            });
+
+            // Helper to parse cost numbers from strings like 'JPY 1,200'
+            const parseCost = (text) => {
+                if (!text) return 0;
+                const num = text.replace(/[^0-9.,]/g, '').replace(/,/g, '');
+                const val = parseFloat(num);
+                return isNaN(val) ? 0 : val;
+            };
+
+            // Merge Day column and add Total columns per group
+            groups.forEach((groupRows, dayKey) => {
+                if (groupRows.length === 0) return;
+                // Compute per-day total
+                let dayTotal = 0;
+                groupRows.forEach((row) => {
+                    const costCell = row.cells[costColIndex];
+                    dayTotal += parseCost(costCell ? costCell.textContent : '');
+                });
+
+                // Merge Day cells with rowspan
+                const firstRow = groupRows[0];
+                const dayCell = firstRow.cells[dayColIndex];
+                if (dayCell) {
+                    dayCell.rowSpan = groupRows.length;
+                    dayCell.classList.add('col-day');
+                }
+                for (let i = 1; i < groupRows.length; i++) {
+                    const r = groupRows[i];
+                    // Remove the Day cell from subsequent rows
+                    r.deleteCell(dayColIndex);
+                }
+
+                // Add merged Total columns on the first row in the group
+                const totalLabelTd = document.createElement('td');
+                totalLabelTd.textContent = 'Total';
+                totalLabelTd.className = 'col-total-label';
+                totalLabelTd.rowSpan = groupRows.length;
+                const totalValueTd = document.createElement('td');
+                totalValueTd.textContent = dayTotal.toLocaleString();
+                totalValueTd.className = 'col-total-value';
+                totalValueTd.rowSpan = groupRows.length;
+
+                firstRow.appendChild(totalLabelTd);
+                firstRow.appendChild(totalValueTd);
+            });
+        }
+        document.getElementById('plan-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+
+            const destination = document.getElementById('destination').value;
+            const duration = parseInt(document.getElementById('duration').value);
+            const budget = document.getElementById('budget').value;
+            const interests = document.getElementById('interests').value.split(',').map(item => item.trim()).filter(item => item);
+
+            const loadingDiv = document.getElementById('loading');
+            const outputDiv = document.getElementById('plan-output');
+
+            loadingDiv.style.display = 'block';
+            outputDiv.style.display = 'none';
+
+            try {
+                const response = await fetch('/api/plan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ destination, duration, budget, interests })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+
+                const data = await response.json();
+                // Render returned HTML table content for better readability
+                outputDiv.innerHTML = data.plan;
+                // Post-process table to merge Day and add per-day totals
+                formatPlanTable();
+                outputDiv.style.display = 'block';
+
+            } catch (error) {
+                outputDiv.textContent = 'Error: Could not generate a plan. Please try again.';
+                outputDiv.style.display = 'block';
+                console.error('There was a problem with the fetch operation:', error);
+            } finally {
+                loadingDiv.style.display = 'none';
+            }
+        });
+
+        // Helper to show status
+        function showStatus(message, variant = 'secondary') {
+            const box = document.getElementById('action-status');
+            box.className = `alert alert-${variant}`;
+            box.textContent = message;
+            box.style.display = 'block';
+        }
+
+        // Payment token state and UI guard
+        const authorizeBtn = document.getElementById('btn-authorize-payment');
+        let hasPaymentToken = false;
+        if (authorizeBtn) authorizeBtn.disabled = true;
+
+        // Save Consent
+        document.getElementById('btn-save-consent').addEventListener('click', async () => {
+            const payload = {
+                user_id: 'demo-user',
+                scopes: {
+                    calendar_read: document.getElementById('consent-calendar-read').checked,
+                    calendar_write: document.getElementById('consent-calendar-write').checked,
+                    payment_processing: document.getElementById('consent-payments').checked,
+                    preferences_usage: document.getElementById('consent-preferences').checked,
+                },
+                oauth_provider: 'google'
+            };
+            try {
+                const res = await fetch('/api/consent', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showStatus('Consent saved successfully', 'success');
+            } catch (e) {
+                console.error(e);
+                showStatus('Failed to save consent', 'danger');
+            }
+        });
+
+        // OAuth Login
+        document.getElementById('btn-oauth-login').addEventListener('click', () => {
+            window.location.href = '/oauth/login';
+        });
+
+        // Store Token
+        document.getElementById('btn-store-token').addEventListener('click', async () => {
+            const payload = {
+                user_id: 'demo-user',
+                gateway_token: document.getElementById('gateway-token').value || 'tok_test_abc',
+                last4: document.getElementById('last4').value || '1234',
+                brand: document.getElementById('brand').value || 'VISA'
+            };
+            try {
+                const res = await fetch('/api/payment/store-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showStatus(`Stored token for ${data.masked_pan} (${data.brand || 'Card'})`, 'success');
+                hasPaymentToken = true;
+                if (authorizeBtn) authorizeBtn.disabled = false;
+            } catch (e) {
+                console.error(e);
+                showStatus('Failed to store token', 'danger');
+            }
+        });
+
+        // Authorize Payment
+        document.getElementById('btn-authorize-payment').addEventListener('click', async () => {
+            if (!hasPaymentToken) {
+                showStatus('Please store a payment token before authorizing.', 'warning');
+                return;
+            }
+            const payload = {
+                user_id: 'demo-user',
+                amount_minor: parseInt(document.getElementById('amount-minor').value || '250000'),
+                currency: document.getElementById('currency').value || 'JPY'
+            };
+            try {
+                const res = await fetch('/api/payment/authorize', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showStatus(`Authorized ${data.amount_minor} ${data.currency} (id: ${data.authorization_id})`, 'success');
+            } catch (e) {
+                console.error(e);
+                showStatus('Failed to authorize payment', 'danger');
+            }
+        });
+
+        // Build itinerary from current plan table
+        function buildItineraryFromPlan() {
+            const table = document.querySelector('#plan-output table');
+            if (!table) return [];
+            const thead = table.tHead || table.querySelector('thead');
+            const tbody = table.tBodies[0] || table.querySelector('tbody');
+            if (!thead || !tbody) return [];
+            const headerCells = Array.from(thead.rows[0].cells);
+            let dayColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('day'));
+            let timeColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('time'));
+            let agendaColIndex = headerCells.findIndex(th => th.textContent.toLowerCase().includes('agenda'));
+            if (dayColIndex === -1) dayColIndex = 0;
+            if (timeColIndex === -1) timeColIndex = 1;
+            if (agendaColIndex === -1) agendaColIndex = 2;
+            const items = [];
+            Array.from(tbody.rows).forEach(row => {
+                const dayText = row.cells[dayColIndex]?.textContent.trim() || '';
+                const timeText = row.cells[timeColIndex]?.textContent.trim() || '';
+                const agendaText = row.cells[agendaColIndex]?.textContent.trim() || '';
+                const parts = timeText.split('–');
+                const start = (parts[0] || '').trim();
+                const end = (parts[1] || '').trim();
+                let itemType = 'activity';
+                const lowerAgenda = agendaText.toLowerCase();
+                if (lowerAgenda.includes('flight')) itemType = 'flight';
+                else if (lowerAgenda.includes('hotel')) itemType = 'hotel';
+                items.push({ type: itemType, day: dayText, start, end, ref: agendaText });
+            });
+            return items;
+        }
+
+        // Book from current plan
+        document.getElementById('btn-book-from-plan').addEventListener('click', async () => {
+            const itinerary = buildItineraryFromPlan();
+            if (!itinerary.length) {
+                showStatus('No plan table available to book', 'warning');
+                return;
+            }
+            try {
+                const res = await fetch('/api/book', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'demo-user', itinerary })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showStatus(`Booking processed: ${JSON.stringify(data.results)}`, 'success');
+            } catch (e) {
+                console.error(e);
+                showStatus('Failed to process booking', 'danger');
+            }
+        });
+
+        // --- Autonomous Controls ---
+        let lastReservationId = null;
+        function showAutoStatus(message, level = 'secondary') {
+            const div = document.getElementById('auto-status');
+            div.className = `alert alert-${level}`;
+            div.textContent = message;
+            div.style.display = 'block';
+        }
+
+        function getPolicyFromUI() {
+            const maxBudget = parseInt(document.getElementById('auto-max-budget').value || '0', 10);
+            const currency = (document.getElementById('auto-currency').value || 'USD').trim();
+            const vendor = (document.getElementById('auto-vendor').value || '').trim();
+            const twoStep = document.getElementById('auto-two-step').checked;
+            const allowed_vendors = vendor ? [vendor] : null;
+            const idempotency_key = (document.getElementById('auto-idem').value || '').trim();
+            return { policy: { max_budget_minor: maxBudget, currency, allowed_vendors, date_window_days: 3, require_two_step_payment: twoStep }, vendor, idempotency_key };
+        }
+
+        document.getElementById('btn-auto-hold').addEventListener('click', async () => {
+            const enabled = document.getElementById('autonomous-toggle').checked;
+            if (!enabled) {
+                showAutoStatus('Autonomous Mode is disabled', 'warning');
+                return;
+            }
+            const amount = parseInt(document.getElementById('auto-amount').value || '0', 10);
+            const { policy, vendor, idempotency_key } = getPolicyFromUI();
+            if (!amount || amount <= 0) {
+                showAutoStatus('Please enter a valid booking amount (minor units)', 'warning');
+                return;
+            }
+            try {
+                const res = await fetch('/api/autonomous/hold', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'demo-user', amount_minor: amount, currency: policy.currency, vendor, policy, idempotency_key })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                lastReservationId = data.reservation_id;
+                const idemNote = data.idempotent ? ' (idempotent repeat)' : '';
+                showAutoStatus(`Reservation held (id: ${lastReservationId})${idemNote}`, 'warning');
+            } catch (e) {
+                console.error(e);
+                showAutoStatus('Failed to hold reservation', 'danger');
+            }
+        });
+
+        document.getElementById('btn-auto-approve').addEventListener('click', async () => {
+            if (!lastReservationId) { showAutoStatus('No reservation to approve', 'warning'); return; }
+            try {
+                const res = await fetch('/api/autonomous/approve', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reservation_id: lastReservationId })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showAutoStatus(`Reservation approved (id: ${lastReservationId})`, 'primary');
+            } catch (e) {
+                console.error(e);
+                showAutoStatus('Failed to approve reservation', 'danger');
+            }
+        });
+
+        document.getElementById('btn-auto-capture').addEventListener('click', async () => {
+            if (!lastReservationId) { showAutoStatus('No reservation to capture', 'warning'); return; }
+            try {
+                const idem = (document.getElementById('auto-idem').value || '').trim();
+                const res = await fetch('/api/autonomous/capture', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'demo-user', reservation_id: lastReservationId, idempotency_key: idem })
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                const idemNote = data.idempotent ? ' (idempotent repeat)' : '';
+                showAutoStatus(`Booking confirmed (payment id: ${data.payment?.payment_id || 'n/a'})${idemNote}`, 'success');
+            } catch (e) {
+                console.error(e);
+                let msg = 'Failed to capture payment';
+                try { const j = JSON.parse(e.message); msg = j.error || msg; } catch {}
+                showAutoStatus(msg, 'danger');
+            }
+        });
+
+        // Audit Viewer Logic
+        async function refreshAudit() {
+            const limit = parseInt(document.getElementById('audit-limit').value || '20', 10);
+            const actor = (document.getElementById('audit-actor').value || '').trim();
+            const action = (document.getElementById('audit-action').value || '').trim();
+            const params = new URLSearchParams();
+            if (limit) params.set('limit', String(limit));
+            if (actor) params.set('actor', actor);
+            if (action) params.set('action', action);
+
+            const res = await fetch('/api/audit/recent?' + params.toString());
+            const data = await res.json();
+            const tbody = document.querySelector('#audit-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(e => {
+                const tr = document.createElement('tr');
+                const cells = [e.created_at, e.actor, e.action, e.status, e.reservation_id || '', e.vendor || '', e.amount_minor ?? '', e.currency || '', e.reasons || ''];
+                cells.forEach(val => {
+                    const td = document.createElement('td');
+                    td.textContent = String(val);
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+        }
+        document.getElementById('btn-audit-refresh').addEventListener('click', refreshAudit);
+        document.getElementById('btn-audit-clear').addEventListener('click', () => {
+            document.getElementById('audit-actor').value = '';
+            document.getElementById('audit-action').value = '';
+            refreshAudit();
+        });
+        // Initial load
+        refreshAudit();
+
+        // Improve error messaging for Hold/Approve
+        function parseErrorMessage(e, fallback) {
+            try { const j = JSON.parse(e.message); return j.error || (j.reasons ? (Array.isArray(j.reasons) ? j.reasons.join(', ') : j.reasons) : fallback); } catch { return fallback; }
+        }
+        // Patch Hold listener to show reasons
+        const holdBtn = document.getElementById('btn-auto-hold');
+        holdBtn.replaceWith(holdBtn.cloneNode(true));
+        document.getElementById('btn-auto-hold').addEventListener('click', async () => {
+            const enabled = document.getElementById('autonomous-toggle').checked;
+            if (!enabled) { showAutoStatus('Autonomous Mode is disabled', 'warning'); return; }
+            const amount = parseInt(document.getElementById('auto-amount').value || '0', 10);
+            const { policy, vendor, idempotency_key } = getPolicyFromUI();
+            if (!amount || amount <= 0) { showAutoStatus('Please enter a valid booking amount (minor units)', 'warning'); return; }
+            try {
+                const res = await fetch('/api/autonomous/hold', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: 'demo-user', amount_minor: amount, currency: policy.currency, vendor, policy, idempotency_key }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                lastReservationId = data.reservation_id;
+                const idemNote = data.idempotent ? ' (idempotent repeat)' : '';
+                showAutoStatus(`Reservation held (id: ${lastReservationId})${idemNote}`, 'warning');
+            } catch (e) {
+                console.error(e);
+                showAutoStatus(parseErrorMessage(e, 'Failed to hold reservation'), 'danger');
+            }
+        });
+        // Patch Approve listener to show error
+        const approveBtn = document.getElementById('btn-auto-approve');
+        approveBtn.replaceWith(approveBtn.cloneNode(true));
+        document.getElementById('btn-auto-approve').addEventListener('click', async () => {
+            if (!lastReservationId) { showAutoStatus('No reservation to approve', 'warning'); return; }
+            try {
+                const res = await fetch('/api/autonomous/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ reservation_id: lastReservationId }) });
+                const data = await res.json();
+                if (!res.ok) throw new Error(JSON.stringify(data));
+                showAutoStatus(`Reservation approved (id: ${lastReservationId})`, 'primary');
+            } catch (e) {
+                console.error(e);
+                showAutoStatus(parseErrorMessage(e, 'Failed to approve reservation'), 'danger');
+            }
+        });
+    </script>
+</body>
+</html>
